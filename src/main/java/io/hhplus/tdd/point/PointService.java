@@ -31,8 +31,8 @@ public class PointService {
         if(currentBalance < amount) {
             throw new CustomException("잔고 부족!");
         }
-        long remainingPoints = currentBalance - amount;
-        UserPoint remainUserPoint = userPointRepository.insertOrUpdate(userId, remainingPoints);
+        UserPoint remainUserPoint = userPointRepository.insertOrUpdate(userId, currentBalance - amount);
+        if(remainUserPoint == null) throw new CustomException("사용 실패");
         pointHistoryRepository.insert(userId, amount, TransactionType.USE, System.currentTimeMillis());
 
         return remainUserPoint;

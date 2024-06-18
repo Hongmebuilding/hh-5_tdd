@@ -1,8 +1,11 @@
 package io.hhplus.tdd.point;
 
+import io.hhplus.tdd.database.PointHistoryTable;
+import io.hhplus.tdd.database.UserPointTable;
 import io.hhplus.tdd.point.exception.CustomException;
 import io.hhplus.tdd.point.repository.PointHistoryRepository;
 import io.hhplus.tdd.point.repository.UserPointRepository;
+import io.hhplus.tdd.point.repository.impl.UserPointRepositoryImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -109,23 +112,36 @@ class PointServiceTest {
     void usePoints_enoughMoney() {
         // given
         long userId = 1L;
+        long havingPoint = 700L;
         long usingPoint = 699L;
-        UserPoint currentUserPoint = new UserPoint(1L, 700L, 0L);
-        UserPoint remainUserPoint = new UserPoint(1L, 1L, System.currentTimeMillis());
+        UserPoint expectedUserPoint = new UserPoint(userId, havingPoint - usingPoint, 0L);
+        when(userPointRepository.selectById(userId)).thenReturn(new UserPoint(userId, havingPoint, 0L));
+        when(userPointRepository.insertOrUpdate(userId, havingPoint - usingPoint)).thenReturn(expectedUserPoint);
 
         // when
-        when(userPointRepository.selectById(userId)).thenReturn(currentUserPoint);
-        UserPoint userPoint = pointService.usePoints(userId, usingPoint);
+        UserPoint realUserPoint = pointService.usePoints(userId, usingPoint);
 
         // then
-        assertEquals(userPoint.point(), remainUserPoint.point());
+        assertEquals(expectedUserPoint, realUserPoint);
+        assertEquals(expectedUserPoint.point(), realUserPoint.point());
     }
 
     @Test
     @DisplayName("포인트 사용 내역이 정확히 기록되고 조회되는지 확인하는 테스트 케이스")
     void chargePoints_success() {
         // given
+        long userId = 1L;
+        long updateMillis = 0L;
+        List<PointHistory> makePointHistories = List.of(
+                new PointHistory(1L, userId, 100L, TransactionType.CHARGE, updateMillis),
+                new PointHistory(1L, userId, -70L, TransactionType.USE, updateMillis)
+        );
+
         // when
+        when(pointHistoryRepository.selectAllByUserId(userId)).thenReturn(makePointHistories);
+        List<PointHistory> getPointHistoryList = pointHistoryRepository.selectAllByUserId(userId);
+
         // then
+        assertEquals(makePointHistories, getPointHistoryList);
     }
 }
