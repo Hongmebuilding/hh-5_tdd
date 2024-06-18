@@ -1,5 +1,6 @@
 package io.hhplus.tdd.point;
 
+import io.hhplus.tdd.point.exception.CustomException;
 import io.hhplus.tdd.point.repository.PointHistoryRepository;
 import io.hhplus.tdd.point.repository.UserPointRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,14 @@ public class PointService {
     }
 
     public UserPoint usePoints(long userId, long amount) {
-        return userPointRepository.insertOrUpdate(userId, amount);
+        long currentBalance = userPointRepository.selectById(userId).point();
+        if(currentBalance < amount) {
+            throw new CustomException("잔고 부족!");
+        }
+        long remainingPoints = currentBalance - amount;
+        UserPoint remainUserPoint = userPointRepository.insertOrUpdate(userId, remainingPoints);
+        pointHistoryRepository.insert(userId, amount, TransactionType.USE, System.currentTimeMillis());
+
+        return remainUserPoint;
     }
 }
