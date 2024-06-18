@@ -1,12 +1,15 @@
 package io.hhplus.tdd.point;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -21,6 +24,9 @@ import static org.mockito.Mockito.when;
 @WebMvcTest(PointController.class)
 class PointControllerTest {
     private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Mock
     private PointService pointService;
@@ -78,13 +84,16 @@ class PointControllerTest {
         long amount = 2L;
         long updateMillis = 0L;
         UserPoint userPoint = new UserPoint(userId, amount, updateMillis);
+        String content = objectMapper.writeValueAsString(amount);
 
         // when
         when(pointService.chargePoints(userId, amount)).thenReturn(userPoint);
 
         // then
-        mockMvc.perform(patch("/point/{id}/histories", userId))
-                .andExpect(status().isOk());
+        mockMvc.perform(patch("/point/{id}/charge", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(content)
+        ).andExpect(status().isOk());
     }
 
     @Test
@@ -95,12 +104,15 @@ class PointControllerTest {
         long amount = 1L;
         long updateMillis = 0L;
         UserPoint userPoint = new UserPoint(userId, amount, updateMillis);
+        String content = objectMapper.writeValueAsString(amount);
 
         // when
         when(pointService.usePoints(userId, amount)).thenReturn(userPoint);
 
         // then
-        mockMvc.perform(patch("/point/{id}/use", userId))
-                .andExpect(status().isOk());
+        mockMvc.perform(patch("/point/{id}/use", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(content)
+        ).andExpect(status().isOk());
     }
 }
