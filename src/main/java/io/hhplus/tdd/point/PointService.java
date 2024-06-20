@@ -7,12 +7,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
 public class PointService {
     private final UserPointRepository userPointRepository;
     private final PointHistoryRepository pointHistoryRepository;
+    private final ReentrantLock lock = new ReentrantLock();
 
     public UserPoint getPoints(long userId) {
         return userPointRepository.selectById(userId);
@@ -23,7 +25,15 @@ public class PointService {
     }
 
     public UserPoint chargePoints(long userId, long amount) {
-        return userPointRepository.insertOrUpdate(userId, amount);
+        lock.lock();
+        try{
+            UserPoint userPoint = getPoints(userId);
+            userPoint = userPointRepository.insertOrUpdate(userId, userPoint.point() + amount);
+            pointHistoryRepository.insert(userId, amount, TransactionType.CHARGE, System.currentTimeMillis());
+            return userPoint;
+        }finally {
+            lock.unlock();
+        }
     }
 
     public UserPoint usePoints(long userId, long amount) {

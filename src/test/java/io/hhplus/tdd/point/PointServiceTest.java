@@ -1,11 +1,8 @@
 package io.hhplus.tdd.point;
 
-import io.hhplus.tdd.database.PointHistoryTable;
-import io.hhplus.tdd.database.UserPointTable;
 import io.hhplus.tdd.point.exception.CustomException;
 import io.hhplus.tdd.point.repository.PointHistoryRepository;
 import io.hhplus.tdd.point.repository.UserPointRepository;
-import io.hhplus.tdd.point.repository.impl.UserPointRepositoryImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +10,10 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -144,4 +145,34 @@ class PointServiceTest {
         // then
         assertEquals(makePointHistories, getPointHistoryList);
     }
+
+    @Test
+    @DisplayName("동시 요청에 대한 순차 처리 확인 테스트 케이스")
+    void chargeConcurrentPoints() throws InterruptedException {
+        // given
+        long userId = 1L;
+        int numThreads = 10;
+        long chargingPoints = 100L;
+        long expectedTotalAmount = numThreads * chargingPoints;
+        CountDownLatch countDownLatch = new CountDownLatch(numThreads);
+        ExecutorService executorService = Executors.newFixedThreadPool(numThreads);
+
+        // when
+        IntStream.range(0, numThreads).forEach(e -> executorService.submit(() -> {
+                    try {
+                        pointService.chargePoints(userId, chargingPoints);
+                    } finally {
+                        countDownLatch.countDown();
+                    }
+                }
+        ));
+        countDownLatch.await();
+        executorService.shutdown();
+
+        // then
+        final Long afterPoint = pointService.getPoints(userId).point();
+        assertEquals(expectedTotalAmount, afterPoint);
+    }
+
+
 }

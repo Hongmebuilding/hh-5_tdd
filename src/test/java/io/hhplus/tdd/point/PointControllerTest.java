@@ -11,6 +11,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 import java.util.List;
 
@@ -86,12 +88,17 @@ class PointControllerTest {
     void charge() throws Exception {
         long userId = 1L;
         long amount = 2L;
-        UserPoint userPoint = new UserPoint(userId, amount, 0L);
         String content = objectMapper.writeValueAsString(amount);
+        UserPoint userPoint = new UserPoint(userId, amount, 0L);
 
         when(pointService.chargePoints(userId, amount)).thenReturn(userPoint);
 
-        performPatchRequest(userId, "/charge", content, amount);
+        mockMvc.perform(MockMvcRequestBuilders.patch("/point/{userId}/charge", userId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(content))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(userId))
+                .andExpect(jsonPath("$.point").value(amount));
     }
 
     @Test
