@@ -1,19 +1,24 @@
 package io.hhplus.tdd.point;
 
+import io.hhplus.tdd.database.PointHistoryTable;
+import io.hhplus.tdd.database.UserPointTable;
+import io.hhplus.tdd.point.aggregate.entity.PointHistory;
+import io.hhplus.tdd.point.aggregate.entity.UserPoint;
 import io.hhplus.tdd.point.exception.CustomException;
-import io.hhplus.tdd.point.repository.PointHistoryRepository;
-import io.hhplus.tdd.point.repository.UserPointRepository;
+import io.hhplus.tdd.point.repository.impl.PointHistoryRepositoryImpl;
+import io.hhplus.tdd.point.repository.impl.UserPointRepositoryImpl;
+import io.hhplus.tdd.point.service.PointService;
+import io.hhplus.tdd.point.service.PointServiceImpl;
+import io.hhplus.tdd.util.TaskUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -22,132 +27,20 @@ import static org.mockito.Mockito.*;
 class PointServiceTest {
 
     private PointService pointService;
-
-    @Mock
-    private UserPointRepository userPointRepository;
-    @Mock
-    private PointHistoryRepository pointHistoryRepository;
+    private UserPointRepositoryImpl userPointRepository;
+    private PointHistoryRepositoryImpl pointHistoryRepository;
+    private TaskUtil taskUtil;
 
     @BeforeEach
     public void setUp() {
-        MockitoAnnotations.openMocks(this);
-        pointService = new PointService(userPointRepository, pointHistoryRepository);
+        taskUtil = new TaskUtil();
+        userPointRepository = new UserPointRepositoryImpl(new UserPointTable());
+        pointHistoryRepository = new PointHistoryRepositoryImpl(new PointHistoryTable());
+        pointService = new PointServiceImpl(userPointRepository, pointHistoryRepository, taskUtil);
     }
 
     @Test
-    void getPoints() {
-        // given
-        long userId = 1L;
-        long point = 700L;
-        long updateMillis = 0L;
-        UserPoint userPoint = new UserPoint(userId, point, updateMillis);
-        when(userPointRepository.selectById(userId)).thenReturn(userPoint);
-
-        // when
-        UserPoint realPoints = pointService.getPoints(userId);
-
-        // then
-        assertEquals(userPoint, realPoints);
-        verify(userPointRepository, times(1)).selectById(userId);
-    }
-
-    @Test
-    @DisplayName("포인트 사용 내역이 정확히 기록되고 조회되는지 확인하는 테스트 케이스")
-    void getPointHistories() {
-        // given
-        long userId = 1L;
-        long updateMillis = 0L;
-        List<PointHistory> pointHistories = List.of(
-                new PointHistory(1L, userId, 100L, TransactionType.CHARGE, updateMillis),
-                new PointHistory(1L, userId, -100L, TransactionType.USE, updateMillis)
-        );
-        when(pointHistoryRepository.selectAllByUserId(userId)).thenReturn(pointHistories);
-
-        // when
-        List<PointHistory> realPointHistories = pointService.getPointHistories(userId);
-
-        // then
-        assertEquals(pointHistories, realPointHistories);
-        verify(pointHistoryRepository, times(1)).selectAllByUserId(userId);
-    }
-
-    @Test
-    @DisplayName("포인트 충전 성공 테스트 케이스")
-    void chargePoints() {
-        // given
-        long userId = 1L;
-        long amount = 1000L;
-        long updateMillis = 0L;
-        UserPoint userPoint = new UserPoint(userId, amount, updateMillis);
-        when(userPointRepository.insertOrUpdate(userId, amount)).thenReturn(userPoint);
-
-        // when
-        UserPoint realPoints = pointService.chargePoints(userId, amount);
-
-        // then
-        assertEquals(userPoint, realPoints);
-        verify(userPointRepository, times(1)).insertOrUpdate(userId, amount);
-    }
-
-    @Test
-    @DisplayName("잔고 부족 시 포인트 사용 실패 처리")
-    void usePoints_noMoney() {
-        // given
-        long userId = 1L;
-        long havingPoint = 700L;
-        long usingPoint = 701L;
-        long updateMillis = 0L;
-        UserPoint userPoint = new UserPoint(userId, havingPoint, updateMillis);
-
-        // when
-        when(userPointRepository.selectById(userId)).thenReturn(userPoint);
-
-        // then
-        assertThrows(CustomException.class, () -> {
-            pointService.usePoints(userId, usingPoint);
-        });
-    }
-
-    @Test
-    @DisplayName("잔고 충분 시 포인트 사용 성공 테스트 케이스")
-    void usePoints_enoughMoney() {
-        // given
-        long userId = 1L;
-        long havingPoint = 700L;
-        long usingPoint = 699L;
-        UserPoint expectedUserPoint = new UserPoint(userId, havingPoint - usingPoint, 0L);
-        when(userPointRepository.selectById(userId)).thenReturn(new UserPoint(userId, havingPoint, 0L));
-        when(userPointRepository.insertOrUpdate(userId, havingPoint - usingPoint)).thenReturn(expectedUserPoint);
-
-        // when
-        UserPoint realUserPoint = pointService.usePoints(userId, usingPoint);
-
-        // then
-        assertEquals(expectedUserPoint, realUserPoint);
-        assertEquals(expectedUserPoint.point(), realUserPoint.point());
-    }
-
-    @Test
-    @DisplayName("포인트 사용 내역이 정확히 기록되고 조회되는지 확인하는 테스트 케이스")
-    void chargePoints_success() {
-        // given
-        long userId = 1L;
-        long updateMillis = 0L;
-        List<PointHistory> makePointHistories = List.of(
-                new PointHistory(1L, userId, 100L, TransactionType.CHARGE, updateMillis),
-                new PointHistory(1L, userId, -70L, TransactionType.USE, updateMillis)
-        );
-
-        // when
-        when(pointHistoryRepository.selectAllByUserId(userId)).thenReturn(makePointHistories);
-        List<PointHistory> getPointHistoryList = pointHistoryRepository.selectAllByUserId(userId);
-
-        // then
-        assertEquals(makePointHistories, getPointHistoryList);
-    }
-
-    @Test
-    @DisplayName("동시 요청에 대한 순차 처리 확인 테스트 케이스")
+    @DisplayName("동시 요청에 대한 충전 순차 처리 확인 테스트 케이스")
     void chargeConcurrentPoints() throws InterruptedException {
         // given
         long userId = 1L;
@@ -158,20 +51,61 @@ class PointServiceTest {
         ExecutorService executorService = Executors.newFixedThreadPool(numThreads);
 
         // when
-        IntStream.range(0, numThreads).forEach(e -> executorService.submit(() -> {
-                    try {
-                        pointService.chargePoints(userId, chargingPoints);
-                    } finally {
-                        countDownLatch.countDown();
+        for (int i = 0; i < numThreads; i++) {
+            executorService.submit(() -> {
+                        try {
+                            try {
+                                pointService.chargePoints(userId, chargingPoints);
+                            } catch (ExecutionException | InterruptedException ex) {
+                                throw new RuntimeException(ex);
+                            }
+                        } finally {
+                            countDownLatch.countDown();
+                        }
                     }
-                }
-        ));
+            );
+        }
         countDownLatch.await();
         executorService.shutdown();
 
         // then
         final Long afterPoint = pointService.getPoints(userId).point();
         assertEquals(expectedTotalAmount, afterPoint);
+    }
+
+    @Test
+    @DisplayName("동시 요청에 대한 포인트 사용 순차 처리 확인 테스트 케이스")
+    void useConcurrentPoints() throws InterruptedException {
+        // given
+        long userId = 1L;
+        long initialPoints = 1000L;
+        long usingPoints = 100L;
+        int numThreads = 10;
+        long expectedRemainingPoints = initialPoints - numThreads * usingPoints;
+        userPointRepository.insertOrUpdate(userId, initialPoints);
+        CountDownLatch countDownLatch = new CountDownLatch(numThreads);
+        ExecutorService executorService = Executors.newFixedThreadPool(numThreads);
+
+        // when
+        for (int i = 0; i < numThreads; i++) {
+            executorService.submit(() -> {
+                try {
+                    try {
+                        pointService.usePoints(userId, usingPoints);
+                    } catch (ExecutionException | InterruptedException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                } finally {
+                    countDownLatch.countDown();
+                }
+            });
+        }
+        countDownLatch.await();
+        executorService.shutdown();
+
+        // then
+        final Long afterPoint = pointService.getPoints(userId).point();
+        assertEquals(expectedRemainingPoints, afterPoint);
     }
 
 

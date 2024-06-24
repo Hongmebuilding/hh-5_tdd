@@ -1,12 +1,14 @@
 package io.hhplus.tdd.point;
 
+import io.hhplus.tdd.point.aggregate.entity.PointHistory;
+import io.hhplus.tdd.point.aggregate.entity.UserPoint;
+import io.hhplus.tdd.point.service.PointServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @Slf4j
 @RestController
@@ -14,7 +16,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PointController {
 
-    private final PointService service;
+    private final PointServiceImpl service;
 
     @GetMapping("{id}")
     public UserPoint point(
@@ -34,7 +36,7 @@ public class PointController {
     public UserPoint charge(
             @PathVariable long id,
             @RequestBody long amount
-    ) {
+    ) throws ExecutionException, InterruptedException {
         return service.chargePoints(id, amount);
     }
 
@@ -42,7 +44,7 @@ public class PointController {
     public UserPoint use(
             @PathVariable long id,
             @RequestBody long amount
-    ) {
+    ) throws ExecutionException, InterruptedException {
         return service.usePoints(id, amount);
     }
 }
